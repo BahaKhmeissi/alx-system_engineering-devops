@@ -1,42 +1,55 @@
 #!/usr/bin/python3
-"""Find the number of subs"""
+"""Function to count words in all hot posts of a given Reddit subreddit."""
 import requests
-import shlex
-
-def print_words(word_list=[], hot_list=[]):
-    print(word_list)
-    print(len(hot_list))
-    for word in word_list:
-        count = 0
-        print(word)
-        for title in top_post:
-            if word in shlex.split(title):
-                count += 1
-        print("{}: {}".format(word, count))
 
 
+def count_words(subreddit, word_list, instances={}, after="", count=0):
+    """Prints counts of given words found in hot posts of a given subreddit.
 
-def count_words(subreddit, word_list=[], hot_list=[], after=""):
-    """ show the top 10 posts in a subreddit """
+    Args:
+        subreddit (str): The subreddit to search.
+        word_list (list): The list of words to search for in post titles.
+        instances (obj): Key/value pairs of words/counts.
+        after (str): The parameter for the next page of the API results.
+        count (int): The parameter of results matched thus far.
+    """
+    url = "https://www.reddit.com/r/{}/hot/.json".format(subreddit)
+    headers = {
+        "User-Agent": "linux:0x16.api.advanced:v1.0.0 (by /u/bdov_)"
+    }
+    params = {
+        "after": after,
+        "count": count,
+        "limit": 100
+    }
+    response = requests.get(url, headers=headers, params=params,
+                            allow_redirects=False)
     try:
-        # Change the user agent
-        headers = {'User-Agent': 'cmmolanos'}
-        payload = {'t': 'all', 'after': after}
-        request = requests.get('https://api.reddit.com/r/{}/hot'.
-                               format(subreddit), headers=headers,
-                               params=payload)
-        top_posts = request.json()
+        results = response.json()
+        if response.status_code == 404:
+            raise Exception
+    except Exception:
+        print("")
+        return
 
-        for post in top_posts['data']['children']:
-            hot_list.append(post['data']['title'])
+    results = results.get("data")
+    after = results.get("after")
+    count += results.get("dist")
+    for c in results.get("children"):
+        title = c.get("data").get("title").lower().split()
+        for word in word_list:
+            if word.lower() in title:
+                times = len([t for t in title if t == word.lower()])
+                if instances.get(word) is None:
+                    instances[word] = times
+                else:
+                    instances[word] += times
 
-        after = top_posts['data']['after']
-        print(word_list)
-        print(after)
-        if after is not None:
-            count_words(subreddit, word_list, hot_list, after)
-
-        return (print_words(word_list, hot_list))
-
-    except:
-        return None
+    if after is None:
+        if len(instances) == 0:
+            print("")
+            return
+        instances = sorted(instances.items(), key=lambda kv: (-kv[1], kv[0]))
+        [print("{}: {}".format(k, v)) for k, v in instances]
+    else:
+        count_words(subreddit, word_list, instances, after, count)
